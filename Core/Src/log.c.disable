@@ -1,0 +1,233 @@
+#include "log.h"
+#include <string.h>
+#include <stdio.h>
+
+#define MAX_SESSION_POS     16
+#define PAGE_PER_SESSION    32
+#define MIN_SESSION_ID      1
+#define MAX_SESSION_ID      65535
+
+
+typedef struct {
+    uint16_t session_id;
+}log_session_header_t;
+
+
+typedef struct {
+    uint32_t timestamp;
+    uint16_t size;
+}log_info_header_t;
+
+
+
+static log_status_type_t log_find_session(const log_handle_t *handle, uint16_t session_id, uint16_t *out_session_pos) {
+    for(int session_pos = 0; session_pos < MAX_SESSION_POS; session_pos ++) {
+        uint16_t address_offset = session_pos * PAGE_PER_SESSION * handle->rom_handle->page_size;
+        log_session_header_t session_header = {0};
+        cat24c_status_type_t cat24_ret;
+        cat24_ret = cat24c_read_bytes(handle->rom_handle, address_offset, &session_header, sizeof(session_header));
+        // cat24 error
+        if(cat24_ret != CAT24C_OK) {
+            return LOG_ERR;
+        }
+        // session id match
+        if(session_id == session_header.session_id) {
+            *out_session_pos = session_pos;
+            return LOG_OK;
+        }
+    }
+    return LOG_ERR;
+}
+
+
+static log_status_type_t log_get_new_session_info(const log_handle_t *handle, uint16_t *out_session_pos, uint16_t *out_max_session_id) {
+    uint16_t max_session_id = MIN_SESSION_ID;
+    uint16_t min_session_id = MAX_SESSION_ID;
+    uint16_t min_session_pos = 0;
+    for(uint16_t session_pos = 0; session_pos < MAX_SESSION_POS; session_pos ++) {
+        uint16_t address_offset = session_pos * PAGE_PER_SESSION * handle->rom_handle->page_size;
+        log_session_header_t session_header = {0};
+        cat24c_status_type_t cat24_ret;
+        cat24_ret = cat24c_read_bytes(handle->rom_handle, address_offset, &session_header, sizeof(session_header));
+        // cat24 error
+        if(cat24_ret != CAT24C_OK) {
+            return LOG_ERR;
+        }
+        // read session id lower
+        if(session_header.session_id < min_session_id) {
+            min_session_id = session_header.session_id;
+            min_session_pos = session_pos;
+        }
+        // read session id higher
+        if(session_header.session_id > max_session_id) {
+            max_session_id = session_header.session_id;
+        } 
+    }
+    *out_max_session_id = max_session_id;
+    *out_session_pos = min_session_pos;
+    return LOG_ERR;
+}
+
+
+
+log_status_type_t log_init(log_handle_t *handle, cat24c_handle_t* rom_handle, report_handle_t *report_handle, UART_HandleTypeDef *huart)  {
+    handle->rom_handle = rom_handle;
+    handle->report_handle = report_handle;
+    handle->huart = huart;
+    // create current session
+    uint16_t new_session_pos = 0;
+    log_session_header_t new_session_header = {0};
+    log_status_type_t ret = log_get_new_session_info(handle, &new_session_pos, &new_session_header.session_id);
+    if(ret != LOG_OK) {
+        return LOG_ERR;
+    }
+    // wipe current session page
+    cat24c_status_type_t cat24_ret;
+    uint8_t empty_data[rom_handle->page_size];
+    memset(empty_data, 0, rom_handle->page_size);
+    for(int page_offset = 0; page_offset < PAGE_PER_SESSION; page_offset ++) {
+        uint16_t address = (new_session_pos * PAGE_PER_SESSION + page_offset) * rom_handle->page_size;
+        // wipe page
+        cat24_ret = cat24c_write_bytes(handle->rom_handle, address, empty_data, rom_handle->page_size, false);
+        // wipe error
+        if(cat24_ret != CAT24C_OK) {
+            return LOG_ERR;
+        }
+    }
+    // write session header
+    cat24_ret = cat24c_write_bytes(handle->rom_handle, new_session_pos * PAGE_PER_SESSION, 
+        &new_session_header, sizeof(new_session_header), false);
+    // write error
+    if(cat24_ret != CAT24C_OK) {
+        return LOG_ERR;
+    }
+    // update handler
+    handle->current_session_id = new_session_header.session_id;
+    handle->current_session_addr = new_session_pos * PAGE_PER_SESSION + sizeof(new_session_header);
+    handle->max_current_session_addr = (new_session_pos + 1) * PAGE_PER_SESSION - 1;
+    return LOG_OK;
+};
+
+
+
+log_status_type_t save_log(log_handle_t *handle) {
+    log_info_header_t info_header = {0};
+    info_header.timestamp = HAL_GetTick();
+    // count report detail
+    uint16_t detail_count = 0;
+    uint8_t detail_count_per_ic[IC_COUNT] = {0};
+    for(int ic = 0; ic < IC_COUNT; ic ++) {
+        report_detail_t *rd = REPORT_DETAIL_FIRST(handle->report_handle, ic);
+        while(rd) {
+            detail_count ++;
+            detail_count_per_ic[ic] ++;
+            // go to next rd
+            rd = rd->next;
+        }
+    }
+    info_header.size = detail_count * 2 + IC_COUNT;
+    // create write buffer
+    uint16_t buffer_size = sizeof(info_header) + info_header.size;
+    // rom space not enough
+    if(handle->current_session_addr + buffer_size > handle->max_current_session_addr) {
+        return LOG_ERR;
+    }
+    uint8_t buffer[buffer_size];
+    memset(buffer, 0, buffer_size);
+    // write report detail to buffer
+    uint16_t cursor = sizeof(info_header);
+    for(int ic = 0; ic < IC_COUNT; ic ++) {
+        // write detail count for ic
+        buffer[cursor ++] = detail_count_per_ic[ic];
+        // report detail
+        report_detail_t *rd = REPORT_DETAIL_FIRST(handle->report_handle, ic);
+        while(rd) {
+            buffer[cursor ++] = rd->type;
+            buffer[cursor ++] = rd->value;
+            // go to next rd
+            rd = rd->next;
+        }
+    }
+    // write buffer to rom
+    cat24c_status_type_t cat24_ret = cat24c_write_bytes(handle->rom_handle, handle->current_session_addr, buffer, buffer_size, 1);
+    if(cat24_ret != CAT24C_OK) {
+        return LOG_ERR;
+    }
+    return LOG_OK;
+}
+
+
+
+log_status_type_t print_log(const log_handle_t *handle, uint16_t session_id) {
+    uint16_t session_pos = 0;
+    log_status_type_t ret = log_find_session(handle, session_id, &session_pos);
+    // not found
+    if(ret != LOG_OK) {
+        return LOG_ERR;
+    }
+    // get session data
+    uint16_t buffer_size = PAGE_PER_SESSION * handle->rom_handle->page_size;
+    uint8_t buffer[buffer_size];
+    memset(buffer, 0, buffer_size);
+    cat24c_status_type_t cat24_ret = cat24c_read_bytes(handle->rom_handle, session_pos * buffer_size, buffer, buffer_size);
+    // read error
+    if(cat24_ret != CAT24C_OK) {
+        return LOG_ERR;
+    }
+
+    // get info header
+    uint8_t info_offset = 0;
+    log_info_header_t *info_header = (log_info_header_t*)buffer;
+    while(info_header->size) {
+        // print timestamp
+        char msg_buf[40] = {0};
+        sprintf(msg_buf, "Timestamp:%010lu, Size:%u\n", info_header->timestamp, info_header->size);
+        HAL_UART_Transmit(handle->huart, (uint8_t*)msg_buf, strlen(msg_buf), 10);
+        memset(msg_buf, 0, sizeof(msg_buf));
+        // parse detail
+        uint16_t cursor = sizeof(*info_header);
+        uint8_t ic = 0;
+        uint16_t detail_left = 0;
+        while(buffer[cursor]) {
+            // print segment error count
+            detail_left = buffer[info_offset + cursor++];
+            sprintf(msg_buf, "\tSegment: %02u, Report Count: %03u\n", ic ++, detail_left);
+            HAL_UART_Transmit(handle->huart, (uint8_t*)msg_buf, strlen(msg_buf), 10);
+            memset(msg_buf, 0, sizeof(msg_buf));
+            // print detail
+            for(uint16_t detail_idx = 0; detail_idx < detail_left; detail_idx ++) {
+                uint8_t type = buffer[info_offset + cursor++];
+                uint8_t value = buffer[info_offset + cursor++];
+                switch(type) {
+                case CELL_OPEN_WIRE_FAILED:
+                    sprintf(msg_buf, "\t\tOpen Wire Failed: %u\n", value);
+                    break;
+                
+                case CELL_OV_UV:
+                    sprintf(msg_buf, "\t\tOV UV Failed: %u\n", value);
+                    break;
+
+                case CELL_PARALLEL_FAILED:
+                    sprintf(msg_buf, "\t\tParallel Failed: %u\n", value);
+                    break;
+
+                case THERMISTOR_OT:
+                    sprintf(msg_buf, "\t\tParallel Failed: %u\n", value);
+                    break;
+
+                case THERMISTOR_UT:
+                    sprintf(msg_buf, "\t\tParallel Failed: %u\n", value);
+                    break;
+
+                default:
+                    sprintf(msg_buf, "\t\tUnknown Failed: %u %u\n", type, value);
+                }
+                HAL_UART_Transmit(handle->huart, (uint8_t*)msg_buf, strlen(msg_buf), 10);
+                memset(msg_buf, 0, sizeof(msg_buf));
+            }
+        }
+        info_offset += sizeof(*info_header) + info_header->size;
+        info_header = (log_info_header_t*)(buffer + info_offset);
+    }
+    return LOG_OK;
+}

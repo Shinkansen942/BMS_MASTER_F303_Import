@@ -1,0 +1,32 @@
+#ifndef __LOG_H__
+#define __LOG_H__
+
+#include "cat24c.h"
+#include "report.h"
+#include "usart.h"
+#include "config.h"
+
+typedef enum {
+    LOG_ERR = 0,
+    LOG_OK  = 1
+}log_status_type_t;
+
+
+typedef struct {
+    cat24c_handle_t *rom_handle;        // for store log
+    report_handle_t *report_handle;     // for log source
+    UART_HandleTypeDef *huart;          // for print log
+    uint16_t current_session_id;        // current session id, 1~65535
+    uint16_t current_session_addr;      // current session write address in rom
+    uint16_t max_current_session_addr;  // current session write address max
+}log_handle_t;
+
+
+log_status_type_t log_init(log_handle_t *handle, cat24c_handle_t* rom_handle, report_handle_t *report_handle, UART_HandleTypeDef *huart);
+
+log_status_type_t save_log(log_handle_t *handle);
+
+log_status_type_t print_log(const log_handle_t *handle, uint16_t session_id);
+
+
+#endif
