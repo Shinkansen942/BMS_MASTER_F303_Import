@@ -58,7 +58,7 @@ void update_temperature(const adbms1818_handle_t *bms, float temperature[IC_COUN
     // temperature calculate
     for(int ic = 0; ic < IC_COUNT; ic++) {
         // 3V3 -- Rs -(ADC)- Th -- GND
-        const uint32_t r_s = 4300; 
+        const uint32_t r_s = 10000; 
         uint16_t ref_voltage_mv = ref_voltage[ic] * 0.001f; // uV to mV
 
         for (size_t it = 0; it < 4; it++)
