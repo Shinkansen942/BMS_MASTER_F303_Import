@@ -16,7 +16,7 @@ void get_balancing_control_config(
 );
 
 
-void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, int32_t *current);
+void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, float *current);
 
 
 void open_wire_error_detect(report_handle_t *report_handle, const adbms1818_handle_t *bms);

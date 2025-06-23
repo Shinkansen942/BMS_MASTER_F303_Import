@@ -92,7 +92,7 @@ void init() {
 static adbms1818_stats_t    stats[IC_COUNT];
 static uint32_t             cell_voltage[IC_COUNT][18]; // uV
 static float                temperature[IC_COUNT][32];  // C
-static int32_t              current;        // mA
+static float              current;        // mA
 static int64_t              capacity;       // uA-s
 static uint32_t             total_voltage;  // uA
 static uint32_t             avg_cell_voltage;   // uA

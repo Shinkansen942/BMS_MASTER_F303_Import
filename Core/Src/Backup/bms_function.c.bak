@@ -158,13 +158,17 @@ void update_temperature(const adbms1818_handle_t *bms, float temperature[IC_COUN
 
 
 
-void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, int32_t *current) {
+void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, float *current) {
     static uint32_t last_current_measure;
     static bool cal_finish = false;
     static uint16_t cal_count = 0;
     static uint32_t zero_current_offset;    // adc value
     const int32_t adc_to_micro_volt = 3300000 / 4095;
-    const int32_t micro_volt_to_milli_amp = 180.18e-3f;    // A/mV or mA/uV
+    const float micro_volt_to_milli_amp = 180.18e-3f;    // A/mV or mA/uV
+
+    int16_t center_raw = raw_value - zero_current_offset;
+    int32_t current_voltage = adc_to_micro_volt * center_raw;    // adc value to uV
+    *current = (float) current_voltage * micro_volt_to_milli_amp; // uV to mA
     
     if(HAL_GetTick() - last_current_measure >= 10) {
         uint32_t dt = HAL_GetTick() - last_current_measure;
@@ -179,9 +183,6 @@ void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, int32_t *curre
             }
             return;
         }
-        int16_t center_raw = raw_value - zero_current_offset;
-        int32_t current_voltage = adc_to_micro_volt * center_raw;    // adc value to uV
-        *current = current_voltage * micro_volt_to_milli_amp; // uV to mA
         // *capacity += *current * dt; // mA,ms to uAs
     }
 }

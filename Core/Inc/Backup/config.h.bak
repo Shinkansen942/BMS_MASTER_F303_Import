@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define IC_COUNT 1
+#define IC_COUNT 4
 
 // #define DCC_ENABLE //define to enable cell discharge
 

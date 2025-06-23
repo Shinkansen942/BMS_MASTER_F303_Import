@@ -383,18 +383,18 @@ void can_bus_report_handle(
         case CELL_VOLTAGE:
             can_tx_header->StdId = can_base_id[CELL_VOLTAGE];
             can_tx_header->DLC = 8;
-            data_frame[0] = start_index;
-            // exit when frame full or all cell reported
-            for(int data_offset = 1; 
-                data_offset < 8 && start_index < TOTAL_CELL; 
-                data_offset ++, start_index ++
-            ) {
-                data_frame[data_offset] = cell_voltage_strip[start_index];
-            }
+            // exit when frame full or all cell reported  
+            data_frame[0] = stats[0].SC/1000;
+            data_frame[1] = stats[0].SC/1000 >> 8;
+            data_frame[2] = stats[1].SC/1000;
+            data_frame[3] = stats[1].SC/1000 >> 8;
+            data_frame[4] = stats[2].SC/1000;
+            data_frame[5] = stats[2].SC/1000 >> 8;
+            data_frame[6] = stats[3].SC/1000;
+            data_frame[7] = stats[3].SC/1000 >> 8;
+            
             // this type finished
-            if(start_index == TOTAL_CELL) {
-                reporting_type = FINISHED;
-            }
+            reporting_type = FINISHED;
             break;
 
         case THERMISTOR:
