@@ -50,20 +50,20 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, ERR_Pin|LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, SPI1_CS_Pin|CAN_S_Pin|CAN_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, SPI1_EN_Pin|LED_Pin|ERR_Pin|CAN_STB_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : ERR_Pin LED_Pin */
-  GPIO_InitStruct.Pin = ERR_Pin|LED_Pin;
+  /*Configure GPIO pin : SPI1_CS_Pin */
+  GPIO_InitStruct.Pin = SPI1_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(SPI1_CS_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SPI1_CS_Pin CAN_S_Pin CAN_EN_Pin */
-  GPIO_InitStruct.Pin = SPI1_CS_Pin|CAN_S_Pin|CAN_EN_Pin;
+  /*Configure GPIO pins : SPI1_EN_Pin LED_Pin ERR_Pin CAN_STB_Pin */
+  GPIO_InitStruct.Pin = SPI1_EN_Pin|LED_Pin|ERR_Pin|CAN_STB_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;

@@ -21,6 +21,7 @@ const uint16_t thermistor_table[] = { // -13 ~ 80, step 1
 uint32_t gpio_voltage[IC_COUNT][9];
 uint32_t ref_voltage[IC_COUNT];
 
+#ifdef NEW_MUX
 void update_temperature(const adbms1818_handle_t *bms, float temperature[IC_COUNT][32], adbms1818_cfg_t *cfg) {
     // static uint8_t mux_id;
     static uint8_t mux_ctrl_shift;
@@ -155,8 +156,95 @@ void update_temperature(const adbms1818_handle_t *bms, float temperature[IC_COUN
     }
     
 }
+#else
+void update_temperature(const adbms1818_handle_t *bms, float temperature[IC_COUNT][32], adbms1818_cfg_t *cfg) {
+    static uint8_t mux_id;
+    static uint8_t mux_ctrl_shift;
 
+    // uint32_t gpio_voltage[IC_COUNT][3];
+    uint8_t mux_ctrl = 1 << mux_ctrl_shift;
+    uint16_t i2c_data[3];
+    uint8_t mux_addr = (0x4C | mux_id) << 1;
+    // uint32_t ref_voltage[IC_COUNT];
+    // setup mux
+    i2c_data[0] = I2C_DATA(I2C_START, mux_addr, I2C_M_NAK);
+    i2c_data[1] = I2C_DATA(I2C_BLANK, mux_ctrl, I2C_M_NAK_STOP);
+    i2c_data[3] = 0;
+    adbms1818_start_i2c(bms, i2c_data, 2);
+    HAL_Delay(1);   // wait mux switch and capacitor charge
+    // cfg[0].GPIO = 0x1AF;
+    // for (size_t i = 1; i < IC_COUNT; i++)
+    // {
+    //     cfg[i].GPIO = cfg[0].GPIO;
+    // }
+    // adbms1818_write_cfg(bms,cfg);
+    // adc conversion
+    adbms1818_gpio_adc_conversion(bms, ADC_GPIO_ALL, OPT0_422_OPT1_1K, 0);
+    uint32_t conversion_start = HAL_GetTick();
+    while(HAL_GetTick() - conversion_start < 15) {
+        loop_no_adbms();
+    }
+    adbms1818_get_gpio_voltage(bms, gpio_voltage, ref_voltage);
+    // temperature calculate
+    for(int ic = 0; ic < IC_COUNT; ic++) {
+        // 3V3 -- Rs -(ADC)- Th -- GND
+        const uint32_t r_s = 10000; 
+        uint16_t ref_voltage_mv = ref_voltage[ic] * 0.001f; // uV to mV
+        uint16_t adc_voltage = gpio_voltage[ic][0] * 0.001f; // uV to mV
+        /*  
+            formula: 
+            th  = thermistor resistance
+            rs  = up series-restistor resistance
+            adc = adc read voltage
+                3.3 * th / (th + rs) = adc
+                3.3 * th = adc * th + adc * rs
+                (3.3 - adc) * th = adc * rs
+                th = adc * rs / (3.3 - adc)
+        */
+        // ADC voltage to thermistor resistance
+        float r_th = (float)(adc_voltage * r_s) / (float)(ref_voltage_mv - adc_voltage);
+        // get temperature from table
+        uint16_t thermistor_table_count = sizeof(thermistor_table) / sizeof(thermistor_table[0]);
+        for(int i = 0; i < thermistor_table_count; i ++) {
+            // thermistor_table first
+            if(r_th >= thermistor_table[0]) {
+                temperature[ic][mux_id * 8 + mux_ctrl_shift] = -13;
+                break;
 
+            // thermistor_table end
+            }else if(r_th <= thermistor_table[thermistor_table_count - 1]) {
+                temperature[ic][mux_id * 8 + mux_ctrl_shift] = (float)thermistor_table_count - 13 - 1;
+                break;
+            
+            // find thermistor_table < r_th
+            }else if(thermistor_table[i] < r_th) {
+                float r_th_per_c = thermistor_table[i+1] - thermistor_table[i];
+                temperature[ic][mux_id * 8 + mux_ctrl_shift] = (float)i - 13 + (r_th - thermistor_table[i]) / r_th_per_c;
+                break;
+            }
+        }
+    }
+    // clear the mux at last ctrl shift
+    if(mux_ctrl_shift == 7) {
+        mux_ctrl = 0;
+        i2c_data[0] = I2C_DATA(I2C_START, mux_addr, I2C_M_NAK);
+        i2c_data[1] = I2C_DATA(I2C_BLANK, mux_ctrl, I2C_M_NAK_STOP);
+        i2c_data[3] = 0;
+        adbms1818_start_i2c(bms, i2c_data, 2);
+    }
+
+    // move mux shift
+    if(++ mux_ctrl_shift >= 8) {
+        mux_ctrl_shift = 0;
+        // move mux ic idx
+        if(++ mux_id >= 4) {
+            mux_id = 0;
+        }
+    }
+}
+#endif
+
+// extern offset[2];
 
 void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, float *current) {
     static uint32_t last_current_measure;
@@ -164,7 +252,7 @@ void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, float *current
     static uint16_t cal_count = 0;
     static uint32_t zero_current_offset;    // adc value
     const int32_t adc_to_micro_volt = 3300000 / 4095;
-    const float micro_volt_to_milli_amp = 180.18e-3f;    // A/mV or mA/uV
+    const float micro_volt_to_milli_amp = 5e-2f;    // A/mV or mA/uV
 
     int16_t center_raw = raw_value - zero_current_offset;
     int32_t current_voltage = adc_to_micro_volt * center_raw;    // adc value to uV
@@ -393,7 +481,7 @@ void start_error_timer(TIM_HandleTypeDef *htim) {
 void update_error_timer(bool error) {
     if(!error) {
         __HAL_TIM_SET_COUNTER (error_htim, 0);
-        HAL_GPIO_WritePin(ERR_GPIO_Port, ERR_Pin, SET);
+        HAL_GPIO_WritePin(ERR_GPIO_Port, ERR_Pin, RESET);
     }   
 }
 
@@ -404,6 +492,6 @@ void update_error_timer(bool error) {
  */
 void error_timer_it_handle(TIM_HandleTypeDef *htim) {
     if(htim->Instance == error_htim->Instance) {
-        HAL_GPIO_WritePin(ERR_GPIO_Port, ERR_Pin, RESET);
+        HAL_GPIO_WritePin(ERR_GPIO_Port, ERR_Pin, SET);
     }
 }

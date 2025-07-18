@@ -85,8 +85,8 @@ void init() {
 
     /* CAN */
     // transceiever pin init
-    HAL_GPIO_WritePin(CAN_EN_GPIO_Port, CAN_EN_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(CAN_S_GPIO_Port, CAN_S_Pin, GPIO_PIN_RESET);
+    // HAL_GPIO_WritePin(CAN_EN_GPIO_Port, CAN_EN_Pin, GPIO_PIN_SET);
+    // HAL_GPIO_WritePin(CAN_S_GPIO_Port, CAN_S_Pin, GPIO_PIN_RESET);
     // config
     can_tx_header.IDE = CAN_ID_STD;
     can_tx_header.RTR = CAN_RTR_DATA;
@@ -138,7 +138,7 @@ void loop_no_adbms() {
 
     /* Report */
     can_bus_report_handle(&hcan, &can_tx_header, &report_handle, cell_voltage, temperature, stats, 
-        current, capacity, total_voltage, avg_cell_voltage);
+        (int32_t)last_current, capacity, total_voltage, avg_cell_voltage);
     uart_report_handle(1000, &report_handle, cell_voltage, temperature, stats);
 
     // last_adc_raw = (1.0f-adc_alpha)*last_adc_raw+adc_alpha*(current_sense_raw[1]-current_sense_raw[0]);

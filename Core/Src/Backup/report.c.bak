@@ -285,7 +285,7 @@ static void cell_voltage_preprocess(uint8_t cell_voltage_strip[], const uint32_t
             if(!(1 << cell & CELL_MASK)) {
                 continue;
             }
-            cell_voltage_strip[strip_index ++] = cell_voltage[ic][cell] * 5e-5f; // 1uV/LSB to 20mV/LSB
+            cell_voltage_strip[strip_index ++] = cell_voltage[ic][cell] / 20000; // 1uV/LSB to 20mV/LSB
         }
     }
 }
@@ -383,18 +383,18 @@ void can_bus_report_handle(
         case CELL_VOLTAGE:
             can_tx_header->StdId = can_base_id[CELL_VOLTAGE];
             can_tx_header->DLC = 8;
-            // exit when frame full or all cell reported  
-            data_frame[0] = stats[0].SC/1000;
-            data_frame[1] = stats[0].SC/1000 >> 8;
-            data_frame[2] = stats[1].SC/1000;
-            data_frame[3] = stats[1].SC/1000 >> 8;
-            data_frame[4] = stats[2].SC/1000;
-            data_frame[5] = stats[2].SC/1000 >> 8;
-            data_frame[6] = stats[3].SC/1000;
-            data_frame[7] = stats[3].SC/1000 >> 8;
-            
+            data_frame[0] = start_index;
+            // exit when frame full or all cell reported
+            for(int data_offset = 1; 
+                data_offset < 8 && start_index < TOTAL_CELL; 
+                data_offset ++, start_index ++
+            ) {
+                data_frame[data_offset] = cell_voltage_strip[start_index];
+            }
             // this type finished
-            reporting_type = FINISHED;
+            if(start_index == TOTAL_CELL) {
+                reporting_type = FINISHED;
+            }
             break;
 
         case THERMISTOR:
@@ -459,7 +459,7 @@ void can_bus_report_handle(
         //     data_frame[0], data_frame[1], data_frame[2], data_frame[3],
         //     data_frame[4], data_frame[5], data_frame[6], data_frame[7]
         // );
-        // HAL_UART_Transmit(&huart1, (uint8_t*)log, strlen(log), 20);
+        // HAL_UART_Transmit(&huart2, (uint8_t*)log, strlen(log), 20);
         free_mailbox_count --;
     }
 }

@@ -4,7 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define IC_COUNT 4
+#define IC_COUNT 1
+
+#define NEW_MUX // define to use new mux control, old mux control is not available
 
 // #define DCC_ENABLE //define to enable cell discharge
 
@@ -24,8 +26,8 @@
 #define THERMISTORS_MASK {\
     0xFFFFFFFF,\
     0xFFFFFFFF,\
-    0x00FFFFFF,\
-    0x00FFFFFF,\
+    0xFFFFFFFF,\
+    0xFFFFFFFF,\
     0xFFFFFFFF,\
     0xFFFFFFFF,\
     0xFFFFFFFF\

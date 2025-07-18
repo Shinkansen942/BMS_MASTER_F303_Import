@@ -24,6 +24,7 @@ static adbms1818_handle_t bms;
 static adbms1818_cfg_t bms_cfg[IC_COUNT];
 static CAN_TxHeaderTypeDef can_tx_header;
 static report_handle_t report_handle;
+uint16_t offset={0};
 
 static char cmd_buffer[30] = {0};
 static uint8_t log_buffer[MAX_LOG_COUNT][MAX_SIZE_PER_LOG] = {0};
@@ -33,12 +34,34 @@ volatile static bool cmd_flag;  // true: new cmd
 
 static uint16_t current_sense_raw[2] = {0};
 
+void calibrateOffsets(uint16_t *offset,uint16_t *dma_adc){
+	const int calibration_rounds = 1000;
+	uint32_t temp_offset[2] = {0};
 
+	// 查找0电流时候的电压
+
+	// uint16_t cal_current[3];
+	for (int i = 0; i < calibration_rounds; i++) {
+		// read_ADC_voltage(hadc1,cal_current);
+		for (int j=0;j<2;j++){
+			temp_offset[j]+=dma_adc[j];
+		}		
+		HAL_Delay(5);
+	}
+	for (int i = 0; i < 2; i++)
+	{
+		offset[i] = temp_offset[i]/calibration_rounds;
+	}
+	
+}
 
 void init() {
     /* ADC */
+    HAL_Delay(100);
     HAL_ADCEx_Calibration_Start(&hadc1,ADC_SINGLE_ENDED);
+    HAL_Delay(100);
     HAL_ADC_Start_DMA(&hadc1, (uint32_t*)current_sense_raw, 2);
+    calibrateOffsets(offset,current_sense_raw);
 
     /* adbms1818 */
     // init handler
@@ -62,8 +85,8 @@ void init() {
 
     /* CAN */
     // transceiever pin init
-    HAL_GPIO_WritePin(CAN_EN_GPIO_Port, CAN_EN_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(CAN_S_GPIO_Port, CAN_S_Pin, GPIO_PIN_RESET);
+    // HAL_GPIO_WritePin(CAN_EN_GPIO_Port, CAN_EN_Pin, GPIO_PIN_SET);
+    // HAL_GPIO_WritePin(CAN_S_GPIO_Port, CAN_S_Pin, GPIO_PIN_RESET);
     // config
     can_tx_header.IDE = CAN_ID_STD;
     can_tx_header.RTR = CAN_RTR_DATA;
@@ -92,10 +115,12 @@ void init() {
 static adbms1818_stats_t    stats[IC_COUNT];
 static uint32_t             cell_voltage[IC_COUNT][18]; // uV
 static float                temperature[IC_COUNT][32];  // C
-static float              current;        // mA
+static float                current;        // mA
 static int64_t              capacity;       // uA-s
 static uint32_t             total_voltage;  // uA
 static uint32_t             avg_cell_voltage;   // uA
+static float                last_current;
+static const float          current_alpha = 0.001f;
 
 
 static uint32_t _debug_loop_no_adbms_dt;
@@ -113,11 +138,14 @@ void loop_no_adbms() {
 
     /* Report */
     can_bus_report_handle(&hcan, &can_tx_header, &report_handle, cell_voltage, temperature, stats, 
-        current, capacity, total_voltage, avg_cell_voltage);
+        (int32_t)last_current, capacity, total_voltage, avg_cell_voltage);
     uart_report_handle(1000, &report_handle, cell_voltage, temperature, stats);
 
+    // last_adc_raw = (1.0f-adc_alpha)*last_adc_raw+adc_alpha*(current_sense_raw[1]-current_sense_raw[0]);
+
     /* Current Measure */
-    measure_current(&hadc1, current_sense_raw[0], &current);
+    measure_current(&hadc1, current_sense_raw[1]-current_sense_raw[0], &current);
+    last_current = (1.0f-current_alpha)*last_current+current_alpha*current;
 
     /* Error Detect */
     // parallel_error_detect(&report_handle, cell_voltage);
