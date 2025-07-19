@@ -87,6 +87,7 @@ void init() {
     // transceiever pin init
     // HAL_GPIO_WritePin(CAN_EN_GPIO_Port, CAN_EN_Pin, GPIO_PIN_SET);
     // HAL_GPIO_WritePin(CAN_S_GPIO_Port, CAN_S_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(CAN_STB_GPIO_Port, CAN_STB_Pin, GPIO_PIN_RESET);
     // config
     can_tx_header.IDE = CAN_ID_STD;
     can_tx_header.RTR = CAN_RTR_DATA;
