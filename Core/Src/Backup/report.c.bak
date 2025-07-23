@@ -417,7 +417,7 @@ void can_bus_report_handle(
         case HEARTBEAT:
             can_tx_header->StdId = can_base_id[HEARTBEAT];
             can_tx_header->DLC = 1;
-            data_frame[0] = 0x7F;
+            data_frame[0] = 0x05;
             // finish this type
             reporting_type = FINISHED;
             break;

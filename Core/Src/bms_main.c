@@ -56,6 +56,8 @@ void calibrateOffsets(uint16_t *offset,uint16_t *dma_adc){
 }
 
 void init() {
+    HAL_GPIO_WritePin(ERR_GPIO_Port, ERR_Pin, GPIO_PIN_SET);
+    
     /* ADC */
     HAL_Delay(100);
     HAL_ADCEx_Calibration_Start(&hadc1,ADC_SINGLE_ENDED);

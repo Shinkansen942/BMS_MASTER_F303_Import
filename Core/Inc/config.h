@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define IC_COUNT 7
+#define IC_COUNT 1
 
 #define NEW_MUX // define to use new mux control, old mux control is not available
 
@@ -24,7 +24,7 @@
     th0 = LSB
 */
 #define THERMISTORS_MASK {\
-    0xFFFFFFFF,\    
+    0x00000000,\    
     0xFFFFFFFF,\
     0xFFFFFFFF,\
     0xFFFFFFFF,\
