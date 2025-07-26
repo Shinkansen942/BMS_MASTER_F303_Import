@@ -123,7 +123,7 @@ static int64_t              capacity;       // uA-s
 static uint32_t             total_voltage;  // uA
 static uint32_t             avg_cell_voltage;   // uA
 static float                last_current;
-static const float          current_alpha = 0.001f;
+static const float          current_alpha = 0.0001f;
 
 
 static uint32_t _debug_loop_no_adbms_dt;
@@ -147,7 +147,7 @@ void loop_no_adbms() {
     // last_adc_raw = (1.0f-adc_alpha)*last_adc_raw+adc_alpha*(current_sense_raw[1]-current_sense_raw[0]);
 
     /* Current Measure */
-    measure_current(&hadc1, current_sense_raw[1]-current_sense_raw[0], &current);
+    measure_current(&hadc1, (uint16_t)(current_sense_raw[0]), &current);
     last_current = (1.0f-current_alpha)*last_current+current_alpha*current;
 
     /* Error Detect */

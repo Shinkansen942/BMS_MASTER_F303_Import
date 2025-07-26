@@ -247,17 +247,19 @@ void update_temperature(const adbms1818_handle_t *bms, float temperature[IC_COUN
 // extern offset[2];
 
 void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, float *current) {
+    static float last_current = 0;
+    static float adc_alpha = 0.001f; // 10% alpha
     static uint32_t last_current_measure;
     static bool cal_finish = false;
     static uint16_t cal_count = 0;
-    static uint32_t zero_current_offset;    // adc value
-    const int32_t adc_to_micro_volt = 3300000 / 4095;
+    static int32_t zero_current_offset;    // adc value
+    const int32_t adc_to_micro_volt = 5000000 / 4095;
     const float micro_volt_to_milli_amp = 5e-2f;    // A/mV or mA/uV
 
-    int16_t center_raw = raw_value - zero_current_offset;
+    int32_t center_raw = raw_value - zero_current_offset;
     int32_t current_voltage = adc_to_micro_volt * center_raw;    // adc value to uV
-    *current = (float) current_voltage * micro_volt_to_milli_amp; // uV to mA
-    
+    *current = current_voltage * micro_volt_to_milli_amp; // uV to mA
+
     if(HAL_GetTick() - last_current_measure >= 10) {
         uint32_t dt = HAL_GetTick() - last_current_measure;
         last_current_measure = HAL_GetTick();
@@ -265,7 +267,7 @@ void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, float *current
         // calibration
         if(!cal_finish) {
             zero_current_offset += raw_value;
-            if(++ cal_count >= 100) {
+            if(++ cal_count >= 1000) {
                 cal_finish = true;
                 zero_current_offset /= cal_count;
             }

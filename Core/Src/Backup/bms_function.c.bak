@@ -250,8 +250,8 @@ void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, float *current
     static uint32_t last_current_measure;
     static bool cal_finish = false;
     static uint16_t cal_count = 0;
-    static uint32_t zero_current_offset;    // adc value
-    const int32_t adc_to_micro_volt = 3300000 / 4095;
+    static uint16_t zero_current_offset;    // adc value
+    const int32_t adc_to_micro_volt = 3/2*3300000 / 4095;
     const float micro_volt_to_milli_amp = 5e-2f;    // A/mV or mA/uV
 
     int16_t center_raw = raw_value - zero_current_offset;
@@ -265,7 +265,7 @@ void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, float *current
         // calibration
         if(!cal_finish) {
             zero_current_offset += raw_value;
-            if(++ cal_count >= 100) {
+            if(++ cal_count >= 10) {
                 cal_finish = true;
                 zero_current_offset /= cal_count;
             }
