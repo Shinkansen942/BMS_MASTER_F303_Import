@@ -343,6 +343,7 @@ bms_status_type_t adbms1818_read_stats(const adbms1818_handle_t *bms, adbms1818_
         }else {
             memset(&stats[ic], 0, sizeof(stats[ic]));
             stats[ic].PEC_FAILED = 1;
+            memset(stats[ic].OUV_FLAG, 1, 18);
             continue;
         }
         // Parse
@@ -528,11 +529,38 @@ bms_status_type_t adbms1818_get_gpio_voltage(const adbms1818_handle_t *bms, uint
 
 
 
+// bms_status_type_t adbms1818_get_cell_voltage(const adbms1818_handle_t *bms, uint32_t voltage[][18]) {
+//     uint16_t size = bms->ic_count * 8;
+//     uint8_t data[6][size];
+//     uint16_t offset = 0;
+
+//     wake_up(bms);
+//     BMS_ERR_CHECK(cmd_read(bms, RDCVA, data[0], size, false))
+//     BMS_ERR_CHECK(cmd_read(bms, RDCVB, data[1], size, false))
+//     BMS_ERR_CHECK(cmd_read(bms, RDCVC, data[2], size, false))
+//     BMS_ERR_CHECK(cmd_read(bms, RDCVD, data[3], size, false))
+//     BMS_ERR_CHECK(cmd_read(bms, RDCVE, data[4], size, false))
+//     BMS_ERR_CHECK(cmd_read(bms, RDCVF, data[5], size, false))
+//     for(int ic = 0; ic < bms->ic_count; ic++) {
+//         for(int group = 0; group < 6; group++) {
+//             bool pec_ok = pec_check(&data[group][offset], 8);
+//             if(!pec_ok) {
+//                 return BMS_ERR;
+//             }
+//             voltage[ic][group * 3 + 0] = (data[group][offset + 0] | (uint32_t)data[group][offset + 1] << 8) * 100;
+//             voltage[ic][group * 3 + 1] = (data[group][offset + 2] | (uint32_t)data[group][offset + 3] << 8) * 100;
+//             voltage[ic][group * 3 + 2] = (data[group][offset + 4] | (uint32_t)data[group][offset + 5] << 8) * 100;
+//         }
+//         offset += 8;
+//     }
+//     return BMS_OK;
+// }
+
 bms_status_type_t adbms1818_get_cell_voltage(const adbms1818_handle_t *bms, uint32_t voltage[][18]) {
     uint16_t size = bms->ic_count * 8;
     uint8_t data[6][size];
     uint16_t offset = 0;
-
+    bms_status_type_t status_ret = BMS_OK;
     wake_up(bms);
     BMS_ERR_CHECK(cmd_read(bms, RDCVA, data[0], size, false))
     BMS_ERR_CHECK(cmd_read(bms, RDCVB, data[1], size, false))
@@ -544,7 +572,11 @@ bms_status_type_t adbms1818_get_cell_voltage(const adbms1818_handle_t *bms, uint
         for(int group = 0; group < 6; group++) {
             bool pec_ok = pec_check(&data[group][offset], 8);
             if(!pec_ok) {
-                return BMS_ERR;
+                status_ret = BMS_ERR;
+                voltage[ic][group * 3 + 0] = 0;
+                voltage[ic][group * 3 + 1] = 0;
+                voltage[ic][group * 3 + 2] = 0;
+                continue;
             }
             voltage[ic][group * 3 + 0] = (data[group][offset + 0] | (uint32_t)data[group][offset + 1] << 8) * 100;
             voltage[ic][group * 3 + 1] = (data[group][offset + 2] | (uint32_t)data[group][offset + 3] << 8) * 100;
@@ -552,7 +584,7 @@ bms_status_type_t adbms1818_get_cell_voltage(const adbms1818_handle_t *bms, uint
         }
         offset += 8;
     }
-    return BMS_OK;
+    return status_ret;
 }
 
 
