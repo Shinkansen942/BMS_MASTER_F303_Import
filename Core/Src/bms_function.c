@@ -254,7 +254,7 @@ void measure_current(ADC_HandleTypeDef *hadc, uint16_t raw_value, float *current
     static uint16_t cal_count = 0;
     static int32_t zero_current_offset;    // adc value
     const int32_t adc_to_micro_volt = 5000000 / 4095;
-    const float micro_volt_to_milli_amp = 5e-2f;    // A/mV or mA/uV
+    const float micro_volt_to_milli_amp = 87.5e-3f;    // A/mV or mA/uV
 
     int32_t center_raw = raw_value - zero_current_offset;
     int32_t current_voltage = adc_to_micro_volt * center_raw;    // adc value to uV

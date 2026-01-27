@@ -123,7 +123,7 @@ static int64_t              capacity;       // uA-s
 static uint32_t             total_voltage;  // uA
 static uint32_t             avg_cell_voltage;   // uA
 static float                last_current;
-static const float          current_alpha = 0.0001f;
+static const float          current_alpha = 0.001f;
 
 
 static uint32_t _debug_loop_no_adbms_dt;
